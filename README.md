@@ -97,6 +97,21 @@ All these settings have built-in defaults; you only need to change them if you w
 #### Step 5: Click Deploy!
 Click the **"Deploy"** button. The platform will automatically install dependencies, initialize the encrypted runtime, and start your bot within 60 seconds!
 
+> [!IMPORTANT]
+> ### 🚨 **IMPORTANT: Prevent Sleep Mode (Keep Bot Running 24/7 Online)**
+> Free cloud platforms (jaise Voroa, Render, etc.) par 15 minute bina request ke bot **Sleep Mode** me chala jata hai. Bot ko **24/7 bina ruke active** rakhne ke liye sabse popular aur 100% free service hai **[UptimeRobot](https://uptimerobot.com/)**.
+>
+> **📋 Step-by-Step Keep-Alive Setup:**
+> 1. Deploy hone ke baad aapko aapki site ka live URL milega (jaise: `https://pepebot.getvoroa.com` ya `https://your-bot.onrender.com`).
+> 2. **[UptimeRobot](https://uptimerobot.com/)** par jayein aur free account banakar **`+ Add New Monitor`** par click karein.
+> 3. Yeh options set karein:
+>    - **Monitor Type:** `HTTP(s)`
+>    - **Friendly Name:** `Viper Userbot`
+>    - **URL (or IP):** Apni site ka link aage `/healthz` laga kar daalein:  
+>      👉 **`https://pepebot.getvoroa.com/healthz`** *(⚠️ **Must:** Aage `/healthz` zaroor lagayein taaki probe hamesha `200 OK` return kare!)*
+>    - **Monitoring Interval:** `5 minutes`
+> 4. **`Create Monitor`** par click kar dein. Ab UptimeRobot har 5 minute me bot ko ping karta rahega aur aapka bot **kabhi sleep mode me nahi jayega!**
+
 > 💬 **Need Help Deploying?**
 > If you encounter any deployment errors or have configuration questions, contact the developer directly on Telegram: **[@Gazarkahalwahu](https://t.me/Gazarkahalwahu)**
 
