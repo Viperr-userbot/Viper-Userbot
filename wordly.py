@@ -24,6 +24,13 @@ def init_wordly(
     Prioritizes common real-world English words for Wordly puzzles.
     """
     global COMMON_WORDS, ALL_WORDS, ALL_WORDS_BY_LEN, ANAGRAM_MAP, _INITIALIZED
+    try:
+        from core.auth import verify_author_integrity
+        verify_author_integrity()
+    except Exception as e:
+        log.error("Integrity check failed in Wordly engine: %s", e)
+        return
+
     if _INITIALIZED:
         return
 

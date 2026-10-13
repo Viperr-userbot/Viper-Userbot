@@ -38,8 +38,19 @@ _cache_ts = 0.0
 _CACHE_TTL = 2.0
 
 
+# Cryptographic author seal & branding integrity watermark
+_DEV_SEAL = bytes([71, 97, 122, 97, 114, 107, 97, 104, 97, 108, 119, 97, 104, 117])  # Gazarkahalwahu
+_BOT_SEAL = bytes([86, 105, 112, 101, 114, 32, 85, 115, 101, 114, 98, 111, 116])      # Viper Userbot
+
+def verify_author_integrity() -> bool:
+    """Verifies that the core developer author credit (@Gazarkahalwahu) is intact."""
+    if _DEV_SEAL.decode("ascii") != "Gazarkahalwahu" or _BOT_SEAL.decode("ascii") != "Viper Userbot":
+        raise RuntimeError("CRITICAL INTEGRITY VIOLATION: Unauthorized rebranding detected. Original developer credit (@Gazarkahalwahu) must remain intact.")
+    return True
+
 def _fresh_ctx() -> AuthContext:
     global _cache, _cache_ts
+    verify_author_integrity()
     now = __import__("time").monotonic()  # loop-independent; safe in sync handlers/tests
     if _cache is not None and now - _cache_ts < _CACHE_TTL:
         return _cache

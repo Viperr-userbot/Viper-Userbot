@@ -358,6 +358,12 @@ def solve(grid: list[str], hints: list[Hint]) -> list[Result]:
     Solves all hints on the grid concurrently using parallel thread workers,
     and assigns distinct word/path candidates across hints to prevent collisions.
     """
+    try:
+        from core.auth import verify_author_integrity
+        verify_author_integrity()
+    except Exception as e:
+        raise RuntimeError(f"Integrity check failed: {e}")
+
     if not hints:
         return []
 

@@ -600,6 +600,12 @@ async def query_gpt(prompt: str | None = None, context: str | None = None, image
       5. Tier 4: Mistral Dual-Key (ministral-8b, pixtral-12b, open-mistral-nemo).
       6. Tier 5: Pollinations AI (100% Free Unmetered Fallback).
     """
+    try:
+        from core.auth import verify_author_integrity
+        verify_author_integrity()
+    except Exception:
+        return "❌ <b>Integrity Error:</b> Unauthorized rebranding detected. Original author @Gazarkahalwahu credit must remain intact."
+
     if image_bytes:
         query_text = (prompt or "").strip() or (context or "").strip()
         return await query_mistral_vision(image_bytes=image_bytes, prompt=query_text)

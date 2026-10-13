@@ -4794,8 +4794,31 @@ async def telethon_watchdog():
             log.debug("Watchdog healthcheck: %s", e)
         await asyncio.sleep(60)
 
+def _verify_author_seal():
+    """Validates the author identity watermark across core runtime."""
+    try:
+        from core.auth import verify_author_integrity
+        verify_author_integrity()
+    except Exception as e:
+        log.critical("Author seal violation: %s", e)
+        sys.exit("❌ Integrity Violation: Author credit (@Gazarkahalwahu) must remain intact.")
+
+    main_py_path = os.path.abspath(__file__)
+    if os.path.exists(main_py_path):
+        try:
+            with open(main_py_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                if "Gazarkahalwahu" not in content:
+                    log.critical("CRITICAL: Rebranding / author credit (@Gazarkahalwahu) has been removed! Execution terminated.")
+                    sys.exit("❌ Integrity Violation: Author credit (@Gazarkahalwahu) must remain intact.")
+        except SystemExit:
+            raise
+        except Exception:
+            pass
+
 async def run_telethon():
     """Runs Telethon client until disconnected."""
+    _verify_author_seal()
     if not client.is_connected():
         log.info("Connecting Telethon client...")
         await client.connect()

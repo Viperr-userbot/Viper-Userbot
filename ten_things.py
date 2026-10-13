@@ -276,6 +276,13 @@ async def solve_10things(category: str, items: list[str], blocked: set[str] | No
     - Validates answers using multi-tier elastic validation.
     - `blocked`: words already chosen/confirmed/rejected in this round (uppercase); never returned again.
     """
+    try:
+        from core.auth import verify_author_integrity
+        verify_author_integrity()
+    except Exception as e:
+        log.error("Integrity check failed in 10Things solver: %s", e)
+        return []
+
     if not items:
         return []
     blocked = {b.upper() for b in (blocked or set())}

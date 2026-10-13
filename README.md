@@ -5,6 +5,7 @@
 [![Star Repo](https://img.shields.io/badge/⭐%20Star-Repository-yellow?style=for-the-badge&logo=github)](../../)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Telethon](https://img.shields.io/badge/Telegram-Telethon%20v1.36-2ca5e0?style=for-the-badge&logo=telegram&logoColor=white)](https://github.com/LonamiWebs/Telethon)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary%20%7C%20All%20Rights%20Reserved-red?style=for-the-badge&logo=shield)](LICENSE)
 
 A powerful, high-speed, feature-packed Telegram userbot equipped with automated **Game Solvers** (Wordly, Hidden Word Hunt, 10Things, Octopus), multi-model **AI Assistant** (Groq, Gemini, Mistral, OpenRouter), **320kbps Music Downloader**, **Sticker Maker** (Kang & Quotly), and **Smart Productivity Tools**.
 
@@ -237,3 +238,15 @@ If you encounter any issues during setup, generating string sessions, or deployi
 - 👨‍💻 **Developer / Support:** [@Gazarkahalwahu](https://t.me/Gazarkahalwahu)
 - 🚀 **Telegram Direct Chat:** [t.me/Gazarkahalwahu](https://t.me/Gazarkahalwahu)
 - ⚡ **Assistance:** 24/7 Setup, Deployment & Bug Resolution Support!
+
+---
+
+## 📜 Proprietary License & Legal Protection
+
+Copyright © 2026 **Viper Userbot** & [@Gazarkahalwahu](https://t.me/Gazarkahalwahu). All Rights Reserved.
+
+- **Non-Commercial Personal Use Only:** This repository is source-available solely for personal usage and deployment.
+- **Strict Anti-Theft Policy:** Unauthorized copying, rebranding, renaming, monetization, or selling of this project's code or algorithms is strictly prohibited.
+- **DMCA Enforcement:** Any unauthorized forks, stolen code, or modified re-distributions on GitHub will be immediately reported for takedown under the **Digital Millennium Copyright Act (DMCA)**.
+- See the full legal terms in the [LICENSE](LICENSE) file.
+
