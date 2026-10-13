@@ -60,6 +60,7 @@ HELP_CATEGORIES: dict[str, dict[str, Any]] = {
             "• <code>.setkey &lt;pass&gt;</code> / <code>.delkey</code> — Chat encryption key setup\n"
             "• <code>.info [user]</code> / <code>.whois</code> — User info card\n"
             "• <code>.ping</code> — Real-time latency\n"
+            "• <code>.repo</code> — Official GitHub repository & deploy links\n"
             "• <code>,restart</code> — Full bot restart (Owner only)\n"
             "• <code>.update</code> — Auto-pull updates from GitHub & restart\n"
             "• <code>.stop</code> — Sab running kaam aur queue cancel (silent, group mein output nahi)\n"
@@ -131,6 +132,8 @@ CATEGORY_ALIASES: dict[str, str] = {
     "info": "tools",
     "whois": "tools",
     "ping": "tools",
+    "repo": "tools",
+    "github": "tools",
     "update": "tools",
     "restart": "tools",
     "sudo": "sudo",

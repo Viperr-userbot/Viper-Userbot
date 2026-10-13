@@ -43,8 +43,8 @@ MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "pixtral-12b-2409")
 
 GAME_BOT = os.getenv("GAME_BOT", "hiddenwordhuntbot")
 TRIGGER = os.getenv("TRIGGER", r"^(\.k|\.c)$")
-UPSTREAM_REPO = os.getenv("UPSTREAM_REPO", "").strip()
-UPSTREAM_BRANCH = os.getenv("UPSTREAM_BRANCH", "master").strip()
+UPSTREAM_REPO = os.getenv("UPSTREAM_REPO", "https://github.com/Viperr-userbot/Viper-Userbot.git").strip() or "https://github.com/Viperr-userbot/Viper-Userbot.git"
+UPSTREAM_BRANCH = os.getenv("UPSTREAM_BRANCH", "main").strip() or "main"
 
 _groq_keys_env = os.getenv("GROQ_API_KEYS", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

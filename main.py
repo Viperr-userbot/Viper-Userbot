@@ -10,6 +10,9 @@ import random
 import html
 import httpx
 import unicodedata
+import shutil
+import zipfile
+import io
 from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -2276,6 +2279,7 @@ async def start_cmd(event):
         f"💡 <b>Commands Guide:</b>\n"
         f"• <code>.help</code> — View all commands menu\n"
         f"• <code>.ping</code> — Check live latency & speed\n"
+        f"• <code>.repo</code> — Official GitHub repository & deploy links\n"
         f"• <code>.update</code> — Auto-pull updates from GitHub\n\n"
         f"👨‍💻 <b>Developer:</b> @Gazarkahalwahu"
     )
@@ -2297,6 +2301,37 @@ async def ping_cmd(event):
         f"👨‍💻 <b>Developer:</b> @Gazarkahalwahu",
         parse_mode="html"
     )
+
+@client.on(events.NewMessage(pattern=r"^[,.]repo$"))
+async def repo_cmd(event):
+    """
+    Displays official Viper Userbot repository link, deployment guides, and developer credits.
+    """
+    if not is_authorized(event):
+        return
+
+    repo_url = getattr(config, "UPSTREAM_REPO", "") or "https://github.com/Viperr-userbot/Viper-Userbot"
+    clean_repo_url = repo_url[:-4] if repo_url.endswith(".git") else repo_url
+    branch = getattr(config, "UPSTREAM_BRANCH", "main")
+
+    card = (
+        "🐍 <b>VIPER USERBOT — OFFICIAL REPOSITORY</b> 🐍\n"
+        "────────────────────────\n"
+        "⭐ <b>GitHub Repository:</b>\n"
+        f"👉 <a href=\"{clean_repo_url}\">{clean_repo_url}</a>\n\n"
+        "🚀 <b>1-Click Deploy (24/7 Free):</b>\n"
+        "👉 <a href=\"https://app.getvoroa.com/\">Deploy on Voroa Cloud</a>\n\n"
+        "✨ <b>Core Features:</b>\n"
+        "• 🎮 <i>Game Solvers (Wordly, Word Hunt, 10Things, Octopus)</i>\n"
+        "• 🤖 <i>Multi-Engine AI Assistant (.gpt)</i>\n"
+        "• 🎵 <i>320kbps Music Downloader (.song)</i>\n"
+        "• 🛡️ <i>100% Anti-Ban Human Typing Simulator</i>\n\n"
+        f"🌿 <b>Branch:</b> <code>{branch}</code>\n"
+        "👨‍💻 <b>Developer:</b> @Gazarkahalwahu\n"
+        "────────────────────────\n"
+        "💡 <i>Star ⭐ & Fork 🍴 the repo on GitHub to support!</i>"
+    )
+    await reply_or_edit(event, card, parse_mode="html", link_preview=False)
 
 @client.on(events.NewMessage(pattern=r"^[,.]restart$"))
 async def restart_cmd(event):
@@ -2334,10 +2369,276 @@ async def restart_cmd(event):
         log.error("os.execv failed: %s. Using sys.exit(0)...", e)
         sys.exit(0)
 
+def find_git_binary() -> str | None:
+    """Finds available git executable in PATH or standard system directories."""
+    git_bin = shutil.which("git")
+    if git_bin:
+        return git_bin
+    common_paths = [
+        r"C:\Program Files\Git\cmd\git.exe",
+        r"C:\Program Files\Git\bin\git.exe",
+        r"C:\Program Files (x86)\Git\cmd\git.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Git\cmd\git.exe"),
+        "/usr/bin/git",
+        "/usr/local/bin/git",
+        "/bin/git",
+    ]
+    for p in common_paths:
+        if os.path.exists(p):
+            return p
+    return None
+
+async def perform_http_zip_update(event, only_check: bool = False, force: bool = False):
+    """
+    Direct GitHub HTTP/Zip updater fallback when git CLI is not installed
+    or when repository was deployed without .git.
+    Extracts updates while strictly preserving sensitive user data (.env, sessions, db, etc.).
+    """
+    repo_url = getattr(config, "UPSTREAM_REPO", "") or "https://github.com/Viperr-userbot/Viper-Userbot"
+    branch = getattr(config, "UPSTREAM_BRANCH", "") or "main"
+
+    m = re.search(r"github\.com[/:]([\w.-]+)/([\w.-]+?)(?:\.git)?$", repo_url)
+    if m:
+        owner, repo_name = m.group(1), m.group(2)
+    else:
+        owner, repo_name = "Viperr-userbot", "Viper-Userbot"
+
+    headers = {
+        "User-Agent": "Viper-Userbot/1.0",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    commit_sha = ""
+    commit_msg = "Latest upstream release"
+    commit_author = "Developer"
+
+    status_msg = await reply_or_edit(
+        event,
+        f"🔍 <b>Checking updates directly from GitHub ({owner}/{repo_name}@{branch})...</b>",
+        parse_mode="html"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client_http:
+            api_url = f"https://api.github.com/repos/{owner}/{repo_name}/commits/{branch}"
+            resp = await client_http.get(api_url, headers=headers)
+            if resp.status_code == 200:
+                c_data = resp.json()
+                commit_sha = c_data.get("sha", "")
+                commit_msg = c_data.get("commit", {}).get("message", "Latest upstream update").splitlines()[0]
+                commit_author = c_data.get("commit", {}).get("author", {}).get("name", "Developer")
+            else:
+                log.warning("GitHub API returned status %s: %s", resp.status_code, resp.text[:200])
+    except Exception as e:
+        log.warning("Could not query GitHub commit API: %s", e)
+
+    short_sha = commit_sha[:7] if commit_sha else "latest"
+
+    local_sha = ""
+    hash_file = ".commit_hash"
+    if os.path.exists(hash_file):
+        try:
+            with open(hash_file, "r", encoding="utf-8") as f:
+                local_sha = f.read().strip()
+        except Exception:
+            local_sha = ""
+
+    if only_check:
+        if local_sha and commit_sha and local_sha == commit_sha:
+            await reply_or_edit(
+                event,
+                f"✅ <b>Your userbot is already up to date!</b>\n"
+                f"• <b>Source:</b> <code>GitHub ({owner}/{repo_name}@{branch})</code>\n"
+                f"• <b>Commit:</b> <code>{short_sha}</code>\n"
+                f"• <i>No new updates found upstream.</i>",
+                parse_mode="html"
+            )
+            return
+
+        await reply_or_edit(
+            event,
+            f"📦 <b>Update available from GitHub!</b>\n\n"
+            f"• <b>Repo:</b> <code>{owner}/{repo_name}</code>\n"
+            f"• <b>Branch:</b> <code>{branch}</code>\n"
+            f"• <b>Latest Commit:</b> <code>{short_sha}</code>\n"
+            f"• <b>Author:</b> <i>{html.escape(commit_author)}</i>\n"
+            f"• <b>Changelog:</b> <code>{html.escape(commit_msg)}</code>\n\n"
+            f"💡 <i>Run <code>.update</code> to download and install now.</i>",
+            parse_mode="html"
+        )
+        return
+
+    if not force and local_sha and commit_sha and local_sha == commit_sha:
+        await reply_or_edit(
+            event,
+            f"✅ <b>Your userbot is already up to date!</b>\n"
+            f"• <b>Source:</b> <code>GitHub ({owner}/{repo_name}@{branch})</code>\n"
+            f"• <b>Commit:</b> <code>{short_sha}</code>\n"
+            f"• <i>No new updates found upstream.</i>\n\n"
+            f"💡 <i>Use <code>.update -f</code> to re-download and force refresh all files.</i>",
+            parse_mode="html"
+        )
+        return
+
+    await reply_or_edit(
+        event,
+        f"📦 <b>Downloading updates from GitHub...</b>\n\n"
+        f"• <b>Repository:</b> <code>{owner}/{repo_name}</code>\n"
+        f"• <b>Branch:</b> <code>{branch}</code>\n"
+        f"• <b>Commit:</b> <code>{short_sha}</code>\n"
+        f"⚡ <i>Fetching zip archive (preserving .env and session files)...</i>",
+        parse_mode="html"
+    )
+
+    zip_urls = [
+        f"https://codeload.github.com/{owner}/{repo_name}/zip/refs/heads/{branch}",
+        f"https://github.com/{owner}/{repo_name}/archive/refs/heads/{branch}.zip"
+    ]
+
+    zip_bytes = None
+    last_dl_err = ""
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client_http:
+        for z_url in zip_urls:
+            try:
+                resp = await client_http.get(z_url, headers=headers)
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    zip_bytes = resp.content
+                    break
+                else:
+                    last_dl_err = f"HTTP {resp.status_code}"
+            except Exception as e:
+                last_dl_err = str(e)
+
+    if not zip_bytes:
+        await reply_or_edit(
+            event,
+            f"❌ <b>Download failed:</b> <code>{html.escape(last_dl_err or 'Could not download archive zip')}</code>",
+            parse_mode="html"
+        )
+        return
+
+    def is_protected(path_rel: str) -> bool:
+        norm = os.path.normpath(path_rel)
+        base = os.path.basename(norm).lower()
+        if base in {
+            ".env", ".env.backup", ".env.production",
+            "bot_settings.json", "bot_memories.json",
+            "sudo_users.json", "promoted_users.json",
+            "auth_gcs.json", "userbot.log", "hwh_userbot.session"
+        }:
+            if os.path.exists(norm):
+                return True
+        if base.endswith(".session") or base.endswith(".session-journal"):
+            if os.path.exists(norm):
+                return True
+        if base.endswith((".db", ".sqlite", ".sqlite3")):
+            if os.path.exists(norm):
+                return True
+        parts = norm.split(os.sep)
+        if parts[0] in ("logs", ".git", ".pytest_cache", ".src_vault"):
+            return True
+        return False
+
+    old_req = ""
+    if os.path.exists("requirements.txt"):
+        try:
+            with open("requirements.txt", "r", encoding="utf-8") as f:
+                old_req = f.read()
+        except Exception:
+            pass
+
+    zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    namelist = zf.namelist()
+    if not namelist:
+        await reply_or_edit(event, "❌ <b>Error:</b> Downloaded archive is empty.", parse_mode="html")
+        return
+
+    prefix = namelist[0].split("/")[0] + "/"
+    updated_files_count = 0
+
+    for member in zf.infolist():
+        if not member.filename.startswith(prefix):
+            continue
+        rel = member.filename[len(prefix):]
+        if not rel:
+            continue
+        if member.is_dir():
+            os.makedirs(rel, exist_ok=True)
+            continue
+
+        if is_protected(rel):
+            continue
+
+        os.makedirs(os.path.dirname(rel) or ".", exist_ok=True)
+        file_data = zf.read(member.filename)
+        with open(rel, "wb") as f_out:
+            f_out.write(file_data)
+        updated_files_count += 1
+
+    if commit_sha:
+        try:
+            with open(hash_file, "w", encoding="utf-8") as f:
+                f.write(commit_sha)
+        except Exception:
+            pass
+
+    new_req = ""
+    if os.path.exists("requirements.txt"):
+        try:
+            with open("requirements.txt", "r", encoding="utf-8") as f:
+                new_req = f.read()
+        except Exception:
+            pass
+
+    if old_req and new_req and old_req != new_req:
+        await reply_or_edit(
+            event,
+            "📦 <i>Requirements changed, updating dependencies...</i>",
+            parse_mode="html"
+        )
+        try:
+            pip_proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "pip", "install", "--no-cache-dir", "-r", "requirements.txt",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await pip_proc.communicate()
+        except Exception as e:
+            log.warning("pip install error during http update: %s", e)
+
+    chat_id = event.chat_id
+    msg_id = getattr(status_msg, "id", None) or getattr(event, "id", None)
+    database.set_restart_state(
+        chat_id,
+        msg_id or "",
+        note=f"🚀 <b>Userbot successfully updated ({short_sha}, {updated_files_count} files) and is back online!</b>"
+    )
+
+    await reply_or_edit(
+        event,
+        f"🚀 <b>Update complete ({updated_files_count} files updated)! Restarting userbot in 2 seconds...</b>",
+        parse_mode="html"
+    )
+
+    log.info("HTTP Update complete. Restarting process...")
+    await asyncio.sleep(1.5)
+
+    try:
+        await client.disconnect()
+    except Exception:
+        pass
+
+    args = [sys.executable] + (sys.argv if sys.argv else ["main.py"])
+    try:
+        os.execv(sys.executable, args)
+    except Exception as e:
+        log.error("os.execv failed after http update: %s. Using sys.exit(0)...", e)
+        sys.exit(0)
+
 @client.on(events.NewMessage(pattern=r"^[,.]update(?:\s+(.*))?$"))
 async def update_cmd(event):
     """
-    Checks for updates from the git repository, pulls latest commits, and restarts the userbot.
+    Checks for updates from the git repository or GitHub API, pulls latest commits, and restarts the userbot.
     RESTRICTED TO BOT OWNER ONLY.
     Usage:
       .update          -> Checks and pulls updates if available, then restarts.
@@ -2357,12 +2658,13 @@ async def update_cmd(event):
     only_check = (arg == "check")
     force = (arg in ["force", "-f", "--force"])
 
-    if not os.path.exists(".git"):
-        await reply_or_edit(
-            event,
-            "❌ <b>Error:</b> <code>.git</code> directory not found. Please deploy via <code>git clone</code> to use <code>.update</code>.",
-            parse_mode="html"
-        )
+    git_bin = find_git_binary()
+    has_git = bool(git_bin and os.path.exists(".git"))
+
+    # If git CLI is not installed or .git folder is missing, use Direct GitHub HTTP/Zip updater!
+    if not has_git:
+        log.info("Git binary or .git not available. Using Direct GitHub HTTP/Zip Updater.")
+        await perform_http_zip_update(event, only_check, force)
         return
 
     status_msg = await reply_or_edit(
@@ -2372,14 +2674,13 @@ async def update_cmd(event):
     )
 
     try:
-
         branch_proc = await asyncio.create_subprocess_exec(
-            "git", "rev-parse", "--abbrev-ref", "HEAD",
+            git_bin or "git", "rev-parse", "--abbrev-ref", "HEAD",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         b_out, _ = await branch_proc.communicate()
-        branch = b_out.decode().strip() or "master"
+        branch = b_out.decode().strip() or getattr(config, "UPSTREAM_BRANCH", "main") or "main"
 
         target_remote = "origin"
         target_branch = branch
@@ -2387,14 +2688,14 @@ async def update_cmd(event):
             upstream_repo = getattr(config, "UPSTREAM_REPO", "")
             if upstream_repo:
                 chk_up = await asyncio.create_subprocess_exec(
-                    "git", "remote", "get-url", "upstream",
+                    git_bin or "git", "remote", "get-url", "upstream",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
                 await chk_up.communicate()
                 if chk_up.returncode != 0:
                     add_up = await asyncio.create_subprocess_exec(
-                        "git", "remote", "add", "upstream", upstream_repo,
+                        git_bin or "git", "remote", "add", "upstream", upstream_repo,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE
                     )
@@ -2406,14 +2707,14 @@ async def update_cmd(event):
             target_branch = branch
 
         fetch_proc = await asyncio.create_subprocess_exec(
-            "git", "fetch", target_remote, target_branch,
+            git_bin or "git", "fetch", target_remote, target_branch,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         await fetch_proc.communicate()
 
         count_proc = await asyncio.create_subprocess_exec(
-            "git", "rev-list", f"HEAD...{target_remote}/{target_branch}", "--count",
+            git_bin or "git", "rev-list", f"HEAD...{target_remote}/{target_branch}", "--count",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -2434,7 +2735,7 @@ async def update_cmd(event):
             return
 
         log_proc = await asyncio.create_subprocess_exec(
-            "git", "log", f"HEAD..{target_remote}/{target_branch}", "-n", "5", "--pretty=format:• %s (<code>%h</code>)",
+            git_bin or "git", "log", f"HEAD..{target_remote}/{target_branch}", "-n", "5", "--pretty=format:• %s (<code>%h</code>)",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -2461,14 +2762,14 @@ async def update_cmd(event):
 
         if force:
             reset_proc = await asyncio.create_subprocess_exec(
-                "git", "reset", "--hard", f"{target_remote}/{target_branch}",
+                git_bin or "git", "reset", "--hard", f"{target_remote}/{target_branch}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             await reset_proc.communicate()
 
         pull_proc = await asyncio.create_subprocess_exec(
-            "git", "pull", target_remote, target_branch,
+            git_bin or "git", "pull", target_remote, target_branch,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -2486,7 +2787,7 @@ async def update_cmd(event):
             return
 
         req_changed_proc = await asyncio.create_subprocess_exec(
-            "git", "diff", "HEAD@{1}", "HEAD", "--name-only",
+            git_bin or "git", "diff", "HEAD@{1}", "HEAD", "--name-only",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -2533,6 +2834,9 @@ async def update_cmd(event):
             log.error("os.execv failed after update: %s. Using sys.exit(0)...", e)
             sys.exit(0)
 
+    except (FileNotFoundError, OSError) as e:
+        log.warning("Git execution failed with error (%s). Falling back to Direct GitHub HTTP/Zip Updater.", e)
+        await perform_http_zip_update(event, only_check, force)
     except Exception as e:
         log.error("Error during .update: %s", e, exc_info=True)
         await reply_or_edit(
@@ -4179,6 +4483,31 @@ async def _handle_webhook(request: Request):
                 await send_bot_reply(chat_id, "\n".join(lines), msg_id)
             else:
                 await send_bot_reply(chat_id, "Abhi tak koi sticker pack nahi bana hai. Kisi photo/sticker/GIF par <code>.kang</code> karein!", msg_id)
+            return {"status": "ok"}
+
+        if text.startswith(("/repo", ".repo")):
+            repo_url = getattr(config, "UPSTREAM_REPO", "") or "https://github.com/Viperr-userbot/Viper-Userbot"
+            clean_repo_url = repo_url[:-4] if repo_url.endswith(".git") else repo_url
+            branch = getattr(config, "UPSTREAM_BRANCH", "main")
+            repo_text = (
+                "🐍 <b>Viper Userbot — Official Repository</b>\n\n"
+                f"• <b>GitHub:</b> <a href=\"{clean_repo_url}\">{clean_repo_url}</a>\n"
+                "• <b>Deploy 24/7:</b> <a href=\"https://app.getvoroa.com/\">Deploy on Voroa</a>\n"
+                f"• <b>Branch:</b> <code>{branch}</code>\n"
+                "• <b>Developer:</b> @Gazarkahalwahu\n\n"
+                "⭐ <i>Repo ko Star aur Fork zaroor karein!</i>"
+            )
+            buttons = [
+                [
+                    {"text": "⭐ Star on GitHub", "url": clean_repo_url},
+                    {"text": "🍴 Fork Repo", "url": f"{clean_repo_url}/fork"}
+                ],
+                [
+                    {"text": "🚀 Deploy on Voroa", "url": "https://app.getvoroa.com/"},
+                    {"text": "💬 Support", "url": "https://t.me/Gazarkahalwahu"}
+                ]
+            ]
+            await send_bot_reply(chat_id, repo_text, msg_id, inline_keyboard=buttons)
             return {"status": "ok"}
 
         if text.startswith(("/ping", ".ping")):
