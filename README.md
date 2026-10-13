@@ -99,7 +99,7 @@ Click the **"Deploy"** button. The platform will automatically install dependenc
 
 > [!IMPORTANT]
 > ### 🚨 **IMPORTANT: Prevent Sleep Mode (Keep Bot Running 24/7 Online)**
-> Free cloud platforms (jaise Voroa, Render, etc.) par 15 minute bina request ke bot **Sleep Mode** me chala jata hai. Bot ko **24/7 bina ruke active** rakhne ke liye sabse popular aur 100% free service hai **[UptimeRobot](https://uptimerobot.com/)**.
+> Free cloud platforms (jaise Voroa, Render, etc.) par 15 minute bina request ke bot **Sleep Mode** me chala jata hai. Bot ko **24/7 bina ruke active** rakhne ke liye sabse popular aur 100% free service hai **[UptimeRobot](https://uptimerobot.com/)**.  and also use https://hetrixtools.com/
 >
 > **📋 Step-by-Step Keep-Alive Setup:**
 > 1. Deploy hone ke baad aapko aapki site ka live URL milega (jaise: `https://pepebot.getvoroa.com` ya `https://your-bot.onrender.com`).
