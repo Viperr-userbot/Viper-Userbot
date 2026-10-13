@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Telethon](https://img.shields.io/badge/Telegram-Telethon%20v1.36-2ca5e0?style=for-the-badge&logo=telegram&logoColor=white)](https://github.com/LonamiWebs/Telethon)
 
-A powerful, high-speed, feature-packed Telegram userbot equipped with automated **Game Solvers** (Wordly, Hidden Word Hunt, 10Things, Octopus), multi-model **AI Assistant** (Groq, Gemini, Mistral, OpenRouter), **Restricted Media Grabber**, **320kbps Music Downloader**, **Sticker Maker** (Kang & Quotly), **Anti-Delete Logger**, and **Secret Chat Encryption (AES-256)**.
+A powerful, high-speed, feature-packed Telegram userbot equipped with automated **Game Solvers** (Wordly, Hidden Word Hunt, 10Things, Octopus), multi-model **AI Assistant** (Groq, Gemini, Mistral, OpenRouter), **320kbps Music Downloader**, **Sticker Maker** (Kang & Quotly), and **Smart Productivity Tools**.
 
 > 🚀 **Release Status & Safety Notice:**  
 > **Viper Userbot is a new release!** To keep your Telegram account 100% safe from bans, this initial version comes packed with **carefully tested, safe, and stable core features** (including human typing simulation delays and smart debouncing).  
@@ -91,7 +91,6 @@ All these settings have built-in defaults; you only need to change them if you w
 | `TRIGGER` | `^(\.k\|\.c)$` | Regex command trigger to activate game solvers (e.g., `.k` or `.c`). |
 | `VOTES` | `3` | Number of puzzle solution attempts / votes (range: 1-7). |
 | `PORT` | `8000` | Web server port for healthchecks & 24/7 uptime monitoring. |
-| `ENCRYPTION_KEY` | *(Optional)* | Default global passkey for `.enc` and `.dec` chat encryption. |
 | `UPSTREAM_REPO` | `https://github.com/Viperr-userbot/Viper-Userbot.git` | Official repository for `.update` auto-pulls. |
 | `UPSTREAM_BRANCH` | `main` | Production branch for automatic updates. |
 
@@ -138,7 +137,7 @@ Follow the prompt to enter your phone number and OTP code.
 
 ### 🕹️ Game Solvers & Automation
 - `.k` / `.c` — Automatically solve Wordly, Hidden Word Hunt, 10Things, and Octopus puzzles.
-- `.g [link]` / `.grab [link]` *(or reply `.g`)* — **Universal Content Grabber & Downloader:** Download and grab protected media, photos, videos, voice notes, audio, documents, or text messages from **any private group or channel link** (e.g. `https://t.me/c/1234567890/45`) or public post directly to your personal bot DM / Saved Messages. Bypasses Telegram forwarding and saving restrictions, and automatically deletes your trigger command in group chats for complete privacy.
+- `.g [link]` / `.grab [link]` *(or reply `.g`)* — Save or download media, photos, videos, audio, voice notes, or message text directly to your personal bot DM / Saved Messages.
 - `.gcreply on / off / status` — Direct group chat answer replies with automated score verification.
 - `.humanize on / off / status` — Realistic human typing simulation delay (1s – 8s) to avoid bot detection.
 
@@ -150,19 +149,12 @@ Follow the prompt to enter your phone number and OTP code.
 
 ### 🎵 Media & Utility Tools
 - `.song <name>` / `.music <name>` — Download 320kbps high-quality MP3 tracks with metadata.
-- `.del [n]` / `.deleted` — Anti-delete logger to view recently deleted messages in the chat.
+- `.del [n]` / `.deleted` — View recent message history and logs in the chat.
 - `.kang [emoji]` — Kang any sticker, photo, or GIF into your custom Telegram sticker pack.
 - `.packs` — View your custom sticker pack links and sticker counts.
 - `.q` / `.qf` / `.qr` — Quotly sticker generator with customizable themes and background colors.
 - `.tts <text>` — Generate natural voice notes from text using Microsoft Edge Neural TTS.
 - `.tr [lang]` — Instant multi-language translator supporting text and voice notes.
-
-### 🔐 Secret Chat Encryption & Privacy
-- `.enc <message>` (or reply `.enc`) — Encrypt messages using AES-256 (CBC) + HMAC-SHA256 authentication.
-- `.dec [key]` (reply `.dec`) — Decrypt secret messages directly in the conversation.
-- `.setkey <passkey>` — Set private per-chat encryption key (auto-deletes in 4 seconds for privacy).
-- `.getkey` — Check if active encryption is currently enabled for this chat.
-- `.delkey` — Clear private encryption key for this chat.
 
 ### 🧠 Memory & Auto-Reply
 - `.yaad <text>` — Save custom memories, notes, and facts.
