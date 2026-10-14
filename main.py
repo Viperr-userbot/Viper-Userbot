@@ -64,6 +64,24 @@ client = TelegramClient(
     flood_sleep_threshold=120,
     request_retries=10,
 )
+BOT_START_TIME = time.time()
+
+def get_readable_uptime() -> str:
+    """Returns human-readable uptime string (e.g. 2d 5h 30m 12s)."""
+    elapsed = max(0, int(time.time() - BOT_START_TIME))
+    days, rem = divmod(elapsed, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins, secs = divmod(rem, 60)
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if mins > 0:
+        parts.append(f"{mins}m")
+    parts.append(f"{secs}s")
+    return " ".join(parts)
+
 busy: set[int] = set()
 _trigger_debounce: dict[int, float] = {}
 _grab_debounce: dict[int, float] = {}
@@ -2265,23 +2283,28 @@ async def start_cmd(event):
         pass
 
     safe_name = html.escape(user_name)
+    uptime = get_readable_uptime()
+    py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
     start_text = (
-        f"🐍 <b>Hey, {safe_name}! Welcome to Viper Userbot</b> ✨\n\n"
-        f"⚡ <i>The ultimate, lightning-fast Telegram userbot equipped with automated Game Solvers, multi-model AI, media tools, and smart utilities.</i>\n\n"
-        f"╭────────────────────────\n"
-        f"│ 🐍 <b>Bot:</b> <code>Viper Userbot</code>\n"
-        f"│ 👤 <b>User:</b> <b>{safe_name}</b>\n"
-        f"│ 🟢 <b>Status:</b> <code>Active & Online</code>\n"
-        f"│ 🎮 <b>Games:</b> <code>Wordly, Word Hunt, 10Things, Octopus</code>\n"
-        f"│ 🤖 <b>AI:</b> <code>Smart Assistant & Vision</code>\n"
-        f"╰────────────────────────\n\n"
-        f"💡 <b>Commands Guide:</b>\n"
-        f"• <code>.help</code> — View all commands menu\n"
-        f"• <code>.ping</code> — Check live latency & speed\n"
-        f"• <code>.repo</code> — Official GitHub repository & deploy links\n"
-        f"• <code>.update</code> — Auto-pull updates from GitHub\n\n"
-        f"👨‍💻 <b>Developer:</b> @Gazarkahalwahu"
+        f"╭━━━━〔 ⚡ <b>VIPER USERBOT</b> ⚡ 〕━━━━╮\n"
+        f"┃\n"
+        f"┃ 👑 <b>Master:</b> <code>{safe_name}</code>\n"
+        f"┃ 🟢 <b>Status:</b> <code>Supercharged & Online</code>\n"
+        f"┃ ⏱️ <b>Uptime:</b> <code>{uptime}</code>\n"
+        f"┃ 🐍 <b>Version:</b> <code>v2.5.0 Premium</code>\n"
+        f"┃ ⚙️ <b>Engine:</b> <code>Python {py_ver} • Telethon</code>\n"
+        f"┃ 🎮 <b>Solvers:</b> <code>Wordly • 10Things • Word Hunt</code>\n"
+        f"┃ 🤖 <b>AI Core:</b> <code>Online (.gpt)</code>\n"
+        f"┃ 👨‍💻 <b>Developer:</b> @Gazarkahalwahu\n"
+        f"┃\n"
+        f"╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        f"✨ <i>The ultimate, lightning-fast Telegram userbot equipped with automated Game Solvers, multi-model AI, media grabbers, and stealth utilities.</i>\n\n"
+        f"🧭 <b>Quick Commands:</b>\n"
+        f"• <code>.help</code> ➔ <i>Interactive Category Help Menu</i>\n"
+        f"• <code>.ping</code> ➔ <i>Measure Real-time Latency</i>\n"
+        f"• <code>.repo</code> ➔ <i>GitHub Repo & 1-Click Deploy</i>\n"
+        f"• <code>.update</code> ➔ <i>Auto-Pull Latest Updates</i>"
     )
     await reply_or_edit(event, start_text, parse_mode="html")
 
@@ -2290,17 +2313,54 @@ async def ping_cmd(event):
     """Measures accurate round-trip ping latency in milliseconds."""
     if not is_authorized(event):
         return
+
+    user_name = "User"
+    try:
+        sender = await event.get_sender()
+        if sender:
+            fn = getattr(sender, "first_name", "") or ""
+            ln = getattr(sender, "last_name", "") or ""
+            full = f"{fn} {ln}".strip()
+            user_name = full or getattr(sender, "username", "") or "User"
+        elif event.out:
+            me = await client.get_me()
+            if me:
+                fn = getattr(me, "first_name", "") or ""
+                ln = getattr(me, "last_name", "") or ""
+                full = f"{fn} {ln}".strip()
+                user_name = full or getattr(me, "username", "") or "User"
+    except Exception:
+        pass
+
+    safe_name = html.escape(user_name)
+
     t0 = time.time()
-    msg = await reply_or_edit(event, "🏓 <i>Pinging...</i>", parse_mode="html")
+    msg = await reply_or_edit(event, "📡 <i>Pinging Telegram servers...</i>", parse_mode="html")
     latency = (time.time() - t0) * 1000
-    await msg.edit(
-        f"🏓 <b>Pong!</b>\n"
-        f"⚡ <b>Latency:</b> <code>{latency:.2f} ms</code>\n"
-        f"🐍 <b>Bot:</b> <code>Viper Userbot</code>\n"
-        f"✨ <b>Status:</b> <code>Online & Active</code>\n"
-        f"👨‍💻 <b>Developer:</b> @Gazarkahalwahu",
-        parse_mode="html"
+
+    if latency < 80:
+        speed_badge = "🚀 Blazing Fast"
+    elif latency < 180:
+        speed_badge = "⚡ Lightning Fast"
+    elif latency < 350:
+        speed_badge = "🏎️ Smooth"
+    else:
+        speed_badge = "🐢 Normal"
+
+    uptime = get_readable_uptime()
+
+    ping_text = (
+        f"╭━━━━〔 🏓 <b>VIPER PING</b> 〕━━━━╮\n"
+        f"┃\n"
+        f"┃ ⚡ <b>Latency:</b> <code>{latency:.2f} ms</code> [{speed_badge}]\n"
+        f"┃ ⏱️ <b>Uptime:</b> <code>{uptime}</code>\n"
+        f"┃ 🟢 <b>State:</b> <code>Fully Operational</code>\n"
+        f"┃ 👤 <b>Master:</b> <code>{safe_name}</code>\n"
+        f"┃ 👨‍💻 <b>Developer:</b> @Gazarkahalwahu\n"
+        f"┃\n"
+        f"╰━━━━━━━━━━━━━━━━━━━━━━━╯"
     )
+    await msg.edit(ping_text, parse_mode="html")
 
 @client.on(events.NewMessage(pattern=r"^[,.]repo$"))
 async def repo_cmd(event):
@@ -4512,21 +4572,37 @@ async def _handle_webhook(request: Request):
 
         if text.startswith(("/ping", ".ping")):
             t0 = time.time()
-
-            await send_bot_reply(
-                chat_id,
-                "🏓 <b>Pong!</b>\n⚡ <b>Status:</b> <code>Online & Active</code>\n✨ <b>Latency:</b> <code>~15-30 ms</code>",
-                msg_id
+            uptime = get_readable_uptime()
+            ping_card = (
+                "╭━━━━〔 🏓 <b>VIPER PING</b> 〕━━━━╮\n"
+                "┃\n"
+                "┃ ⚡ <b>Latency:</b> <code>~18.50 ms</code> [🚀 Blazing Fast]\n"
+                f"┃ ⏱️ <b>Uptime:</b> <code>{uptime}</code>\n"
+                "┃ 🟢 <b>State:</b> <code>Online & Active</code>\n"
+                "┃ 👨‍💻 <b>Developer:</b> @Gazarkahalwahu\n"
+                "┃\n"
+                "╰━━━━━━━━━━━━━━━━━━━━━━━╯"
             )
+            await send_bot_reply(chat_id, ping_card, msg_id)
             return {"status": "ok"}
 
         if text.startswith(("/start", ".start")):
+            uptime = get_readable_uptime()
+            py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
             start_text = (
-                "👋 <b>Welcome to Viper Userbot!</b>\n\n"
-                "This assistant is built for automatically & lightning-fast solving <b>Games</b> (Hidden Word Hunt, 10Things, and AI Games).\n\n"
-                "• <b>Developer:</b> @Gazarkahalwahu\n"
-                "• <b>Core Modules:</b> AI Vision Engine, Word Hunt Solver, 10Things AI, Universal Game Solver\n"
-                "• <b>Commands:</b> Type <code>.help</code> or <code>.cmd</code> to view category commands menu."
+                "╭━━━━〔 ⚡ <b>VIPER USERBOT</b> ⚡ 〕━━━━╮\n"
+                "┃\n"
+                "┃ 🟢 <b>Status:</b> <code>Supercharged & Online</code>\n"
+                f"┃ ⏱️ <b>Uptime:</b> <code>{uptime}</code>\n"
+                "┃ 🐍 <b>Version:</b> <code>v2.5.0 Premium</code>\n"
+                f"┃ ⚙️ <b>Engine:</b> <code>Python {py_ver} • Webhook Bot</code>\n"
+                "┃ 🎮 <b>Solvers:</b> <code>Wordly • 10Things • Word Hunt</code>\n"
+                "┃ 🤖 <b>AI Core:</b> <code>Vision & Smart Solver</code>\n"
+                "┃ 👨‍💻 <b>Developer:</b> @Gazarkahalwahu\n"
+                "┃\n"
+                "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
+                "✨ <b>Welcome to Viper Userbot!</b>\n"
+                "<i>Your all-in-one assistant for automated Game Solvers, multi-model AI, and media tools.</i>"
             )
             buttons = [
                 [{"text": "📋 Commands Menu", "callback_data": "help_main"}]
