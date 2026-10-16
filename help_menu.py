@@ -28,17 +28,22 @@ HELP_CATEGORIES: dict[str, dict[str, Any]] = {
         ),
     },
     "media": {
-        "title": "🎵 Media & Content Grabber",
+        "title": "🎵 Media & Music Tools",
         "description": (
-            "🎵 <b>Media, Music & Content Grabber</b>\n\n"
-            "• <code>.g [link]</code> / <code>.grab [link]</code> — Grab restricted media/files from private GC link or reply to bot DM\n"
+            "🎵 <b>Media, Music & Anti-Delete Tools</b>\n\n"
+            "• <code>.tts &lt;text&gt;</code> — Natural voice synthesis (APInex Aura-2)\n"
+            "• <code>.stt</code> — Transcribe replied voice / audio note (APInex Nova)\n"
+            "• <code>.tr [lang] &lt;text&gt;</code> — Fast 112-language translator & speech translator\n"
             "• <code>.song &lt;name&gt;</code> / <code>.music</code> — Download 320kbps MP3\n"
+            "• <code>.rmbg [-png]</code> — Remove background (Instant sticker, pure transparent, zero text)\n"
+            "• <code>.txt [:style] &lt;text&gt;</code> / <code>.txts</code> — Text-to-sticker (40+ styles, Hindi/Devanagari, pack mode)\n"
+            "• <code>.g [link]</code> / <code>.grab [link]</code> — Grab restricted media/files from private GC link or reply to bot DM\n"
             "• <code>.del [n]</code> / <code>.deleted</code> — Anti-delete logger\n"
             "• <code>.kang [emoji]</code> — Kang stickers / GIFs / media\n"
             "• <code>.packs</code> — Sticker pack links & stats\n"
             "• <code>.q</code> / <code>.qf</code> / <code>.qr</code> — Quotly sticker generator\n"
-            "• <code>.tts &lt;text&gt;</code> — Natural voice note audio\n"
-            "• <code>.tr [lang]</code> — Translate text & audio"
+            "• <code>.waifu [art]</code> / <code>.anime</code> — Anime directory & random waifu artwork\n"
+            "• <code>.hug / .pat / .kiss / .slap / .bonk</code> — 30 anime reaction GIF animations"
         ),
     },
     "memory": {
@@ -56,29 +61,32 @@ HELP_CATEGORIES: dict[str, dict[str, Any]] = {
         "description": (
             "🛠️ <b>Utilities & Tools</b>\n\n"
             "• <code>.afk [reason]</code> / <code>.unafk</code> — AFK status with mention alert\n"
+            "• <code>.clone [reply/@user]</code> — Target profile (Name, Bio, DP) clone karein (Owner only)\n"
+            "• <code>.revert</code> / <code>.unclone</code> — Original profile wapas restore karein (Owner only)\n"
             "• <code>.enc [msg]</code> / <code>.dec</code> — Secret chat AES encryption\n"
-            "• <code>.setkey &lt;pass&gt;</code> / <code>.delkey</code> — Chat encryption key setup\n"
+            "• <code>.setkey &lt;pass&gt;</code> / <code>.delkey</code> / <code>.getkey</code> — Chat encryption key setup\n"
             "• <code>.info [user]</code> / <code>.whois</code> — User info card\n"
             "• <code>.ping</code> — Real-time latency\n"
             "• <code>.repo</code> — Official GitHub repository & deploy links\n"
-            "• <code>,restart</code> — Full bot restart (Owner only)\n"
-            "• <code>.update</code> — Auto-pull updates from GitHub & restart\n"
+            "• <code>,restart</code> / <code>.restart</code> — Full bot restart (Owner only)\n"
+            "• <code>.update</code> / <code>.update force</code> — Auto-pull updates from GitHub & restart\n"
             "• <code>.stop</code> — Sab running kaam aur queue cancel (silent, group mein output nahi)\n"
-            "• <code>.start</code> — Bot intro & status\n"
+            "• <code>.start</code> / <code>.alive</code> — Bot intro & status\n"
             "• <code>.inline [q]</code> — Trigger inline queries\n"
-            "• <code>.help [cat]</code> / <code>.cmd</code> — Commands menu"
+            "• <code>.help [cat]</code> / <code>.cmd [cat]</code> — Commands menu"
         ),
     },
     "sudo": {
         "title": "🛡️ Sudo & Groups",
         "description": (
             "🛡️ <b>Sudo & Group Management</b>\n\n"
-            "• <code>.gcauth [chat_id]</code> — Authorize group chat\n"
-            "• <code>.gcunauth [chat_id]</code> — Revoke group chat authorization\n"
-            "• <code>.gclist</code> — List authorized groups\n"
-            "• <code>.auth [user_id]</code> / <code>.unauth</code> — Authorize user DM\n"
-            "• <code>.users</code> — List authorized users\n"
-            "• <code>.sudo [user_id]</code> / <code>.unsudo</code> — Grant / revoke sudo\n"
+            "• <code>.gcauth [chat_id]</code> / <code>.authgc</code> — Authorize group chat\n"
+            "• <code>.gcunauth [chat_id]</code> / <code>.unauthgc</code> — Revoke group chat authorization\n"
+            "• <code>.gclist</code> / <code>.gcauths</code> — List authorized groups\n"
+            "• <code>.auth [user_id]</code> / <code>.promote</code> — Authorize user DM\n"
+            "• <code>.unauth [user_id]</code> / <code>.demote</code> — Revoke user DM authorization\n"
+            "• <code>.users</code> / <code>.authed</code> / <code>.promoted</code> — List authorized users\n"
+            "• <code>.sudo [user_id]</code> / <code>.unsudo</code> — Grant / revoke sudo (Owner only)\n"
             "• <code>.sudousers</code> — List sudo users"
         ),
     },
@@ -97,8 +105,10 @@ CATEGORY_ALIASES: dict[str, str] = {
     "gcreply": "games",
     "ai": "ai",
     "gpt": "ai",
+    "1gpt": "ai",
     "model": "ai",
     "models": "ai",
+    "act": "ai",
     "media": "media",
     "music": "media",
     "song": "media",
@@ -106,20 +116,74 @@ CATEGORY_ALIASES: dict[str, str] = {
     "stickers": "media",
     "sticker": "media",
     "kang": "media",
+    "pack": "media",
+    "packs": "media",
     "quotly": "media",
     "quote": "media",
+    "q": "media",
+    "qf": "media",
+    "qr": "media",
+    "qtrf": "media",
     "tts": "media",
+    "stt": "media",
+    "voice": "media",
     "tr": "media",
     "translate": "media",
     "del": "media",
     "deleted": "media",
+    "rmbg": "media",
+    "bg": "media",
+    "removebg": "media",
+    "txt": "media",
+    "text": "media",
+    "tsticker": "media",
+    "txts": "media",
+    "txtstyles": "media",
+    "waifu": "media",
+    "anime": "media",
+    "reaction": "media",
+    "reactions": "media",
+    "hug": "media",
+    "pat": "media",
+    "kiss": "media",
+    "cuddle": "media",
+    "handhold": "media",
+    "feed": "media",
+    "tickle": "media",
+    "poke": "media",
+    "bite": "media",
+    "wink": "media",
+    "smug": "media",
+    "pout": "media",
+    "smile": "media",
+    "wave": "media",
+    "dance": "media",
+    "laugh": "media",
+    "highfive": "media",
+    "cheers": "media",
+    "slap": "media",
+    "bonk": "media",
+    "punch": "media",
+    "yeet": "media",
+    "stare": "media",
+    "run": "media",
+    "blush": "media",
+    "cry": "media",
+    "sleep": "media",
+    "think": "media",
+    "shrug": "media",
+    "nom": "media",
     "memory": "memory",
     "memories": "memory",
     "yaad": "memory",
     "yaadein": "memory",
     "bhool": "memory",
+    "forget": "memory",
+    "bhoolja": "memory",
     "autoreply": "memory",
     "reply": "memory",
+    "on": "memory",
+    "off": "memory",
     "tools": "tools",
     "tool": "tools",
     "util": "tools",
@@ -128,21 +192,41 @@ CATEGORY_ALIASES: dict[str, str] = {
     "dec": "tools",
     "crypto": "tools",
     "encryption": "tools",
+    "setkey": "tools",
+    "delkey": "tools",
+    "getkey": "tools",
     "afk": "tools",
+    "unafk": "tools",
     "info": "tools",
     "whois": "tools",
     "ping": "tools",
+    "clone": "tools",
+    "revert": "tools",
+    "unclone": "tools",
     "repo": "tools",
     "github": "tools",
     "update": "tools",
     "restart": "tools",
+    "stop": "tools",
     "sudo": "sudo",
     "sudos": "sudo",
+    "sudousers": "sudo",
     "auth": "sudo",
+    "unauth": "sudo",
+    "promote": "sudo",
+    "demote": "sudo",
+    "users": "sudo",
+    "authed": "sudo",
+    "promoted": "sudo",
     "gc": "sudo",
     "group": "sudo",
     "groups": "sudo",
     "gcauth": "sudo",
+    "authgc": "sudo",
+    "gcunauth": "sudo",
+    "unauthgc": "sudo",
+    "gclist": "sudo",
+    "gcauths": "sudo",
     "inline": "tools",
     "start": "tools",
     "alive": "tools",
@@ -188,13 +272,14 @@ def get_fallback_menu_text() -> str:
     """
     return (
         "🐍 <b>Viper Userbot — Commands Hub</b>\n\n"
-        "• <code>.help games</code> — 🎮 Games & Solvers\n"
-        "• <code>.help ai</code> — 🤖 AI Assistant\n"
-        "• <code>.help media</code> — 🎵 Media & Music\n"
-        "• <code>.help memory</code> — 🧠 Memory & Reply\n"
-        "• <code>.help tools</code> — 🛠️ Utilities\n"
-        "• <code>.help sudo</code> — 🛡️ Sudo & Groups\n"
-        "• <code>.help all</code> — 📋 Full list"
+        "• <code>.cmd games</code> — 🎮 Games & Solvers (Wordly, Hunt, 10Things)\n"
+        "• <code>.cmd ai</code> — 🤖 AI Assistant (.gpt, models, latency)\n"
+        "• <code>.cmd media</code> — 🎵 Media, TTS, STT, Songs, Stickers, Waifu\n"
+        "• <code>.cmd memory</code> — 🧠 Memory & AI Auto-Reply\n"
+        "• <code>.cmd tools</code> — 🛠️ Utilities (Clone, AFK, Enc, Ping, Update)\n"
+        "• <code>.cmd sudo</code> — 🛡️ Sudo & Group Management\n"
+        "• <code>.cmd all</code> — 📋 Complete Commands Overview\n\n"
+        "💡 <i>Tip: Detailed view ke liye <code>.cmd &lt;category&gt;</code> ya <code>.cmd all</code> likhein.</i>"
     )
 
 def get_help_main_markup() -> list[list[dict[str, str]]]:

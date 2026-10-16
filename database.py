@@ -748,3 +748,64 @@ def get_and_clear_restart_note() -> str:
         set_setting("restart_note", "")
     return note
 
+
+# ============================================================================
+# CLONE & REVERT PROFILE SYSTEM (.clone, .revert)
+# ============================================================================
+
+def is_clone_active() -> bool:
+    """Returns True if userbot is currently cloned to another user's profile."""
+    return get_setting("clone_active", "0") == "1"
+
+
+def set_clone_active(active: bool, target_id: int | None = None, target_name: str = ""):
+    """Marks profile cloning as active or inactive with target metadata."""
+    set_setting("clone_active", "1" if active else "0")
+    if active:
+        if target_id is not None:
+            set_setting("clone_target_id", str(target_id))
+        if target_name:
+            set_setting("clone_target_name", str(target_name))
+    else:
+        set_setting("clone_target_id", "")
+        set_setting("clone_target_name", "")
+
+
+def has_clone_backup() -> bool:
+    """Returns True if a backup of the original profile exists."""
+    return get_setting("clone_has_backup", "0") == "1"
+
+
+def save_clone_backup(first_name: str, last_name: str, about: str, has_dp: bool):
+    """Saves original profile details before cloning."""
+    set_setting("clone_has_backup", "1")
+    set_setting("clone_backup_first", first_name or "")
+    set_setting("clone_backup_last", last_name or "")
+    set_setting("clone_backup_about", about or "")
+    set_setting("clone_backup_has_dp", "1" if has_dp else "0")
+
+
+def get_clone_backup() -> dict:
+    """Returns a dict containing backed up original profile details."""
+    return {
+        "has_backup": has_clone_backup(),
+        "first_name": get_setting("clone_backup_first", ""),
+        "last_name": get_setting("clone_backup_last", ""),
+        "about": get_setting("clone_backup_about", ""),
+        "has_dp": get_setting("clone_backup_has_dp", "0") == "1",
+        "target_id": get_setting("clone_target_id", ""),
+        "target_name": get_setting("clone_target_name", ""),
+    }
+
+
+def clear_clone_backup():
+    """Clears original profile backup metadata."""
+    set_setting("clone_has_backup", "0")
+    set_setting("clone_backup_first", "")
+    set_setting("clone_backup_last", "")
+    set_setting("clone_backup_about", "")
+    set_setting("clone_backup_has_dp", "0")
+    set_setting("clone_target_id", "")
+    set_setting("clone_target_name", "")
+
+

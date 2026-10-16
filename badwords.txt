@@ -1,0 +1,4 @@
+# Bad-words list for the spam/abuse guard (core/guard.py).
+# One word or phrase per line. Lines starting with # are ignored.
+# Matching is case-insensitive and whole-word only.
+# Add your own Hinglish/English words below.

@@ -22,9 +22,14 @@ from telethon.tl.types import (
     User, Channel, Chat, MessageEntityMentionName, DocumentAttributeAudio
 )
 from telethon.tl.functions.users import GetFullUserRequest
+from core.auth import ctx_is_owner
 import edge_tts
 import config
 import database
+import rmbg
+import txt_sticker
+import clone_profile
+import waifu
 
 log = logging.getLogger("hwh.plugins")
 
@@ -319,7 +324,182 @@ def clear_chat_passkey(chat_id: int) -> None:
     """Remove encryption passkey for a chat."""
     _chat_passkeys.pop(chat_id, None)
 
-def register(client: TelegramClient, is_authorized):
+
+LANG_CODE_MAP = {
+    "hindi": "HI", "hi": "HI",
+    "english": "EN", "en": "EN",
+    "bengali": "BN", "bn": "BN",
+    "telugu": "TE", "te": "TE",
+    "marathi": "MR", "mr": "MR",
+    "tamil": "TA", "ta": "TA",
+    "urdu": "UR", "ur": "UR",
+    "gujarati": "GU", "gu": "GU",
+    "kannada": "KN", "kn": "KN",
+    "malayalam": "ML", "ml": "ML",
+    "punjabi": "PA", "pa": "PA",
+    "spanish": "ES", "es": "ES",
+    "french": "FR", "fr": "FR",
+    "german": "DE", "de": "DE",
+    "russian": "RU", "ru": "RU",
+    "japanese": "JA", "ja": "JA",
+    "chinese": "ZH", "zh": "ZH",
+    "arabic": "AR", "ar": "AR",
+    "portuguese": "PT", "pt": "PT",
+    "italian": "IT", "it": "IT",
+    "korean": "KO", "ko": "KO",
+}
+
+
+def normalize_lang_code(raw: str) -> str:
+    cleaned = (raw or "").strip().lower()
+    return LANG_CODE_MAP.get(cleaned, raw.upper() if raw else "HI")
+
+
+async def call_apinex_tts(text: str, model: str = "aura-2-thalia-en") -> bytes | None:
+    """Synthesizes text into MP3 audio bytes using APInex TTS (/v1/tools/voice/tts)."""
+    keys = config.get_ordered_apinex_keys()
+    if not keys:
+        log.warning("No Apinex keys configured for TTS.")
+        return None
+
+    base_url = config.APINEX_BASE_URL.rstrip("/")
+    endpoint = f"{base_url}/tools/voice/tts"
+    payload = {
+        "text": text,
+        "model": model,
+        "encoding": "mp3",
+        "response_format": "json"
+    }
+
+    async with httpx.AsyncClient(timeout=25.0) as client:
+        for key in keys:
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json"
+            }
+            try:
+                res = await client.post(endpoint, json=payload, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    b64 = data.get("audio_base64")
+                    if b64:
+                        config.report_key_success(key)
+                        return base64.b64decode(b64)
+                else:
+                    log.warning(f"Apinex TTS returned HTTP {res.status_code}: {res.text[:100]}")
+                    config.report_key_error(key, res.status_code)
+            except Exception as e:
+                log.warning(f"Apinex TTS request failed with key {key[:8]}...: {e}")
+                config.report_key_error(key, 0)
+    return None
+
+
+async def call_apinex_stt(audio_bytes: bytes, mime_type: str = "audio/ogg", language: str | None = None) -> dict | None:
+    """Transcribes audio binary into text using APInex STT (/v1/tools/voice/stt)."""
+    keys = config.get_ordered_apinex_keys()
+    if not keys:
+        log.warning("No Apinex keys configured for STT.")
+        return None
+
+    base_url = config.APINEX_BASE_URL.rstrip("/")
+    endpoint = f"{base_url}/tools/voice/stt"
+    if language:
+        endpoint += f"?language={language.lower()}"
+
+    async with httpx.AsyncClient(timeout=35.0) as client:
+        for key in keys:
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": mime_type
+            }
+            try:
+                res = await client.post(endpoint, content=audio_bytes, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    channels = data.get("results", {}).get("channels", [])
+                    if channels:
+                        alts = channels[0].get("alternatives", [])
+                        transcript = alts[0].get("transcript", "").strip() if alts else ""
+                        conf = alts[0].get("confidence", 1.0) if alts else 1.0
+                        det_lang = channels[0].get("detected_language", language or "auto")
+                        dur = data.get("metadata", {}).get("duration", 0.0)
+                        config.report_key_success(key)
+                        return {
+                            "transcript": transcript,
+                            "confidence": conf,
+                            "language": det_lang,
+                            "duration": dur,
+                            "raw": data
+                        }
+                else:
+                    log.warning(f"Apinex STT returned HTTP {res.status_code}: {res.text[:100]}")
+                    config.report_key_error(key, res.status_code)
+            except Exception as e:
+                log.warning(f"Apinex STT request failed with key {key[:8]}...: {e}")
+                config.report_key_error(key, 0)
+    return None
+
+
+async def call_apinex_translator(text: str | list[str], target_lang: str = "HI", source_lang: str | None = None) -> dict | None:
+    """Translates text strings using APInex Translator (/v1/tools/translator)."""
+    keys = config.get_ordered_apinex_keys()
+    if not keys:
+        log.warning("No Apinex keys configured for Translator.")
+        return None
+
+    base_url = config.APINEX_BASE_URL.rstrip("/")
+    endpoint = f"{base_url}/tools/translator"
+    payload = {
+        "text": [text] if isinstance(text, str) else text,
+        "target_lang": target_lang.upper()
+    }
+    if source_lang:
+        payload["source_lang"] = source_lang.upper()
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for key in keys:
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json"
+            }
+            try:
+                res = await client.post(endpoint, json=payload, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    translations = data.get("translations", [])
+                    if translations:
+                        trans_text = translations[0].get("text", "")
+                        det_source = translations[0].get("detected_source_language", source_lang or "auto")
+                        config.report_key_success(key)
+                        return {
+                            "translated_text": trans_text,
+                            "detected_source": det_source,
+                            "translations": translations,
+                            "raw": data
+                        }
+                else:
+                    log.warning(f"Apinex Translator returned HTTP {res.status_code}: {res.text[:100]}")
+                    config.report_key_error(key, res.status_code)
+            except Exception as e:
+                log.warning(f"Apinex Translator request failed with key {key[:8]}...: {e}")
+                config.report_key_error(key, 0)
+    return None
+
+
+def register(client: TelegramClient, is_authorized, is_owner=None):
+    def check_is_owner(event) -> bool:
+        if getattr(event, "out", False):
+            return True
+        sender_id = getattr(event, "sender_id", None)
+        if not sender_id and hasattr(event, "message") and event.message:
+            sender_id = getattr(event.message, "sender_id", None)
+        # Sudo users are strictly forbidden from owner-only actions like clone
+        if sender_id and database.is_sudo_user(sender_id):
+            return False
+        if is_owner is not None:
+            return is_owner(event)
+        return ctx_is_owner(sender_id, getattr(event, "chat_id", None))
+
     @client.on(events.NewMessage(pattern=r"^\.(q|qf|qtrf|qr)(?:\s+(.*))?$"))
     async def quote_cmd(event):
         if not is_authorized(event):
@@ -366,30 +546,57 @@ def register(client: TelegramClient, is_authorized):
             log.error(f"Quote error: {e}")
             await reply_or_edit(event, f"❌ Error: {e}")
 
+    # =========================================================================
+    # APINEX VOICE & TRANSLATION COMMANDS (.tts, .stt, .tr)
+    # =========================================================================
+
     @client.on(events.NewMessage(pattern=r"^\.tts(?:\s+(.*))?$"))
     async def tts_cmd(event):
         if not is_authorized(event):
             return
         try:
-            text = event.pattern_match.group(1)
+            args = (event.pattern_match.group(1) or "").strip()
+            replied = await event.get_reply_message()
+
+            model = "aura-2-thalia-en"
+            text = args
+            parts = args.split(maxsplit=1)
+            if parts and (parts[0].startswith("aura-") or parts[0] in ["thalia", "andromeda", "estrella", "zeus"]):
+                model = parts[0] if parts[0].startswith("aura-") else f"aura-2-{parts[0]}-en"
+                text = parts[1] if len(parts) > 1 else ""
+
+            if not text and replied:
+                text = replied.raw_text or ""
+
             if not text:
-                replied = await event.get_reply_message()
-                text = replied.raw_text if replied else ""
-            if not text:
-                await reply_or_edit(event, "Provide text or reply to a message.")
+                await reply_or_edit(event, "ℹ️ <b>Usage:</b> <code>.tts &lt;text&gt;</code> ya kisi message par reply karke <code>.tts</code> likhein.", parse_mode="html")
                 return
 
-            status_msg = await reply_or_edit(event, "🗣️ Generating TTS...")
-            communicate = edge_tts.Communicate(text, "hi-IN-SwaraNeural")
-            audio_data = b""
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_data += chunk["data"]
+            status_msg = await reply_or_edit(event, f"🗣️ <i>Generating AI speech ({model})...</i>", parse_mode="html")
+
+            audio_data = await call_apinex_tts(text, model=model)
+            if not audio_data:
+                # Fallback to edge_tts
+                try:
+                    communicate = edge_tts.Communicate(text, "hi-IN-SwaraNeural")
+                    edge_bytes = b""
+                    async for chunk in communicate.stream():
+                        if chunk["type"] == "audio":
+                            edge_bytes += chunk["data"]
+                    if edge_bytes:
+                        audio_data = edge_bytes
+                except Exception as e_tts:
+                    log.warning(f"edge_tts fallback failed: {e_tts}")
 
             if audio_data:
                 bio = io.BytesIO(audio_data)
-                bio.name = "tts.mp3"
-                await client.send_file(event.chat_id, bio, reply_to=event.message)
+                bio.name = "voice.mp3"
+                await client.send_file(
+                    event.chat_id,
+                    bio,
+                    voice_note=True,
+                    reply_to=replied or event.id
+                )
                 if event.out:
                     try: await event.delete()
                     except Exception: pass
@@ -397,83 +604,377 @@ def register(client: TelegramClient, is_authorized):
                     try: await status_msg.delete()
                     except Exception: pass
             else:
-                await reply_or_edit(event, "❌ TTS failed.")
+                await reply_or_edit(event, "❌ <b>TTS failed:</b> APInex aur edge-tts dono se audio generate nahi ho saka.", parse_mode="html")
         except Exception as e:
-            log.error(f"TTS error: {e}")
-            await reply_or_edit(event, f"❌ Error: {e}")
+            log.error(f"TTS error: {e}", exc_info=True)
+            await reply_or_edit(event, f"❌ Error: <code>{html.escape(str(e))}</code>", parse_mode="html")
+
+    @client.on(events.NewMessage(pattern=r"^\.stt(?:\s+(.*))?$"))
+    async def stt_cmd(event):
+        if not is_authorized(event):
+            return
+        try:
+            args = (event.pattern_match.group(1) or "").strip()
+            replied = await event.get_reply_message()
+            if not replied or not (replied.voice or replied.audio or replied.video_note or replied.video or replied.media):
+                await reply_or_edit(
+                    event,
+                    "ℹ️ <b>Usage:</b> Kisi voice note, audio ya video message par reply karke <code>.stt [lang]</code> likhein.",
+                    parse_mode="html"
+                )
+                return
+
+            status_msg = await reply_or_edit(event, "🎙️ <i>Downloading & transcribing audio...</i>", parse_mode="html")
+            audio_bytes = await client.download_media(replied, file=bytes)
+            if not audio_bytes:
+                await reply_or_edit(event, "❌ Audio download nahi ho saka.", parse_mode="html")
+                return
+
+            mime = "audio/ogg"
+            if getattr(replied, "audio", None):
+                mime = getattr(replied.file, "mime_type", "audio/mpeg") or "audio/mpeg"
+            elif getattr(replied, "voice", None):
+                mime = "audio/ogg"
+
+            target_lang = normalize_lang_code(args) if args else None
+
+            res = await call_apinex_stt(audio_bytes, mime_type=mime, language=target_lang)
+            if not res or not res.get("transcript"):
+                await reply_or_edit(event, "❌ <b>STT failed:</b> Audio transcribe nahi ho saka ya koi speech detect nahi hui.", parse_mode="html")
+                return
+
+            transcript = res["transcript"]
+            det_lang = (res.get("language") or "auto").upper()
+            conf = res.get("confidence", 1.0)
+            dur = res.get("duration", 0.0)
+            dur_str = f"{dur:.1f}s" if dur else "N/A"
+
+            output = (
+                "🎙️ <b>Speech to Text</b>\n\n"
+                f"• <b>Language:</b> <code>{html.escape(det_lang)}</code>\n"
+                f"• <b>Confidence:</b> <code>{conf * 100:.1f}%</code>\n"
+                f"• <b>Duration:</b> <code>{dur_str}</code>\n\n"
+                f"📝 <b>Transcript:</b>\n"
+                f"<blockquote>{html.escape(transcript)}</blockquote>"
+            )
+            await reply_or_edit(event, output, parse_mode="html")
+        except Exception as e:
+            log.error(f"STT error: {e}", exc_info=True)
+            await reply_or_edit(event, f"❌ Error: <code>{html.escape(str(e))}</code>", parse_mode="html")
 
     @client.on(events.NewMessage(pattern=r"^\.tr(?:\s+(.*))?$"))
     async def tr_cmd(event):
         if not is_authorized(event):
             return
         try:
-            args = event.pattern_match.group(1) or ""
+            args = (event.pattern_match.group(1) or "").strip()
             replied = await event.get_reply_message()
 
             if not args and not replied:
-                await reply_or_edit(event, "Provide text or reply to a message.")
+                await reply_or_edit(
+                    event,
+                    "ℹ️ <b>Usage:</b> <code>.tr [lang] &lt;text&gt;</code> ya kisi message par reply karke <code>.tr [lang]</code> likhein.",
+                    parse_mode="html"
+                )
                 return
 
-            target_lang = "hi"
-            text = args
-            parts = args.split()
-            if parts and len(parts[0]) == 2:
-                target_lang = parts[0]
-                text = " ".join(parts[1:])
+            target_lang = "HI"
+            text = ""
+            parts = args.split(maxsplit=1) if args else []
 
+            if parts:
+                candidate = parts[0].strip().lower()
+                if candidate in LANG_CODE_MAP or (len(candidate) in [2, 5] and candidate.isalpha()):
+                    target_lang = normalize_lang_code(candidate)
+                    text = parts[1].strip() if len(parts) > 1 else ""
+                else:
+                    text = args
+
+            transcript_info = None
+
+            # If no direct text, check replied message
             if not text and replied:
-                text = replied.raw_text
-
-            if not text and replied and (replied.voice or replied.audio):
-                await reply_or_edit(event, "🎙️ Transcribing audio...")
-                try:
+                if replied.voice or replied.audio or replied.video_note:
+                    status_msg = await reply_or_edit(event, "🎙️ <i>Transcribing voice note with APInex STT...</i>", parse_mode="html")
                     audio_bytes = await client.download_media(replied, file=bytes)
-                    groq_keys = getattr(config, "GROQ_API_KEYS", [])
-                    if not groq_keys and getattr(config, "GROQ_API_KEY", None):
-                        groq_keys = [config.GROQ_API_KEY]
-                    if not groq_keys:
-                        await reply_or_edit(event, "❌ GROQ_API_KEY is not configured in .env")
+                    if not audio_bytes:
+                        await reply_or_edit(event, "❌ Audio download nahi ho saka.", parse_mode="html")
                         return
 
-                    files = {"file": ("audio.ogg", audio_bytes, "audio/ogg")}
-                    data = {"model": "whisper-large-v3"}
-
-                    transcript = ""
-                    async with httpx.AsyncClient(timeout=30.0) as http:
-                        for g_key in groq_keys:
-                            try:
-                                headers = {"Authorization": f"Bearer {g_key}"}
-                                res = await http.post("https://api.groq.com/openai/v1/audio/transcriptions", files=files, data=data, headers=headers)
-                                if res.status_code == 200:
-                                    transcript = res.json().get("text", "").strip()
-                                    if transcript:
-                                        break
-                            except Exception:
-                                pass
-                    if transcript:
-                        text = transcript
-                except Exception as e:
-                    log.error(f"Transcription error: {e}")
-                    await reply_or_edit(event, f"❌ Transcription error: {e}")
-                    return
+                    mime = "audio/ogg" if replied.voice else "audio/mpeg"
+                    stt_res = await call_apinex_stt(audio_bytes, mime_type=mime)
+                    if not stt_res or not stt_res.get("transcript"):
+                        await reply_or_edit(event, "❌ Audio transcribe nahi ho saka.", parse_mode="html")
+                        return
+                    text = stt_res["transcript"]
+                    transcript_info = stt_res
+                else:
+                    text = replied.raw_text or ""
 
             if not text:
-                await reply_or_edit(event, "No text to translate.")
+                await reply_or_edit(event, "❌ Translate karne ke liye koi text nahi mila.", parse_mode="html")
                 return
 
-            await reply_or_edit(event, "🌐 Translating...")
-            from gpt_service import query_gpt
-            prompt = f"Translate the following text to {target_lang}. Return ONLY the translated text, without any extra quotes, notes or formatting:\n\n{text}"
-            translated = await query_gpt(prompt=prompt)
+            status_msg = await reply_or_edit(event, f"🌐 <i>Translating to {html.escape(target_lang)}...</i>", parse_mode="html")
 
-            final_text = f"**Translated ({target_lang}):**\n{translated}"
-            if replied and (replied.voice or replied.audio):
-                final_text = f"**Transcript:** {text}\n\n" + final_text
+            # Call APInex Translator API
+            tr_res = await call_apinex_translator(text, target_lang=target_lang)
+            translated_text = ""
+            detected_src = "auto"
+            if tr_res and tr_res.get("translated_text"):
+                translated_text = tr_res["translated_text"]
+                detected_src = (tr_res.get("detected_source") or "auto").upper()
+            else:
+                # LLM / gpt fallback
+                try:
+                    from gpt_service import query_gpt
+                    prompt = f"Translate the following text to {target_lang}. Return ONLY the translated text without extra explanation:\n\n{text}"
+                    translated_text = (await query_gpt(prompt=prompt)).strip()
+                    detected_src = "AUTO"
+                except Exception as ex:
+                    log.warning(f"GPT fallback translation failed: {ex}")
 
-            await reply_or_edit(event, final_text)
+            if not translated_text:
+                await reply_or_edit(event, "❌ <b>Translation failed:</b> Translation response nahi mila.", parse_mode="html")
+                return
+
+            header = f"🌐 <b>Translation</b> (<code>{html.escape(detected_src)} ➔ {html.escape(target_lang.upper())}</code>)\n\n"
+            if transcript_info:
+                header = (
+                    f"🎙️ <b>Transcribed Speech:</b>\n"
+                    f"<blockquote>{html.escape(text)}</blockquote>\n\n"
+                    + header
+                )
+
+            final_output = f"{header}<blockquote>{html.escape(translated_text)}</blockquote>"
+            await reply_or_edit(event, final_output, parse_mode="html")
         except Exception as e:
-            log.error(f"Translate error: {e}")
-            await reply_or_edit(event, f"❌ Error: {e}")
+            log.error(f"Translate error: {e}", exc_info=True)
+            await reply_or_edit(event, f"❌ Error: <code>{html.escape(str(e))}</code>", parse_mode="html")
+
+    # =========================================================================
+    # RMBG - AI BACKGROUND REMOVAL (.rmbg, .removebg, .bg)
+    # =========================================================================
+    @client.on(events.NewMessage(pattern=r"^\.(?:rmbg|removebg|bg)(?:\s+(.*))?$"))
+    async def rmbg_cmd(event):
+        if not is_authorized(event):
+            return
+
+        args = (event.pattern_match.group(1) or "").strip().lower()
+        as_png = any(flag in args.split() for flag in ["-p", "-png", "png", "doc", "-doc"])
+        as_sticker = not as_png
+
+        # Determine target message with media (replied message takes priority, then event message)
+        target_msg = await event.get_reply_message()
+        if not target_msg or not target_msg.media:
+            if event.media:
+                target_msg = event
+            else:
+                await reply_or_edit(
+                    event,
+                    "ℹ️ <b>Usage:</b> Reply to any photo, sticker, or image with <code>.rmbg</code>\n"
+                    "• Sends directly as transparent Telegram Sticker.\n"
+                    "• Add <code>-png</code> to receive as a transparent PNG file.",
+                    parse_mode="html"
+                )
+                return
+
+        # Check for animated/video media which cannot be processed as static images
+        is_animated_or_video = False
+        mime = getattr(target_msg.file, "mime_type", "") if hasattr(target_msg, "file") and target_msg.file else ""
+        ext = getattr(target_msg.file, "ext", "") if hasattr(target_msg, "file") and target_msg.file else ""
+
+        if mime == "application/x-tgsticker" or ext == ".tgs":
+            is_animated_or_video = True
+        elif mime.startswith("video/") or ext in [".mp4", ".webm", ".gif"] or getattr(target_msg, "video", None) or getattr(target_msg, "gif", None):
+            is_animated_or_video = True
+
+        if is_animated_or_video:
+            await reply_or_edit(
+                event,
+                "❌ <i>Animated stickers / video files support nahi hain. Kripya static photo ya image par reply karein.</i>",
+                parse_mode="html"
+            )
+            return
+
+        is_photo = bool(target_msg.photo)
+        is_sticker = bool(target_msg.sticker)
+        is_doc_image = bool(mime.startswith("image/"))
+
+        if not (is_photo or is_sticker or is_doc_image):
+            await reply_or_edit(
+                event,
+                "❌ <i>Kripya kisi Photo, Sticker, ya Image document par reply karein.</i>",
+                parse_mode="html"
+            )
+            return
+
+        status_msg = await reply_or_edit(
+            event,
+            "Removing background...",
+        )
+
+        try:
+            media_bytes = await client.download_media(target_msg, file=bytes)
+            if not media_bytes:
+                await reply_or_edit(event, "❌ Media download nahi ho saka.", parse_mode="html")
+                return
+
+            out_bytes, provider = await rmbg.remove_background(media_bytes, as_sticker=as_sticker)
+            bio = io.BytesIO(out_bytes)
+            if as_sticker:
+                bio.name = "sticker.webp"
+                await client.send_file(
+                    event.chat_id,
+                    bio,
+                    force_document=False,
+                    caption=None,
+                    reply_to=target_msg.id
+                )
+            else:
+                bio.name = "rmbg_transparent.png"
+                await client.send_file(
+                    event.chat_id,
+                    bio,
+                    force_document=True,
+                    caption=None,
+                    reply_to=target_msg.id
+                )
+
+            # Clean up status message and command message so only the sticker remains
+            if status_msg and status_msg != event:
+                try: await status_msg.delete()
+                except Exception: pass
+            if event.out:
+                try: await event.delete()
+                except Exception: pass
+
+        except Exception as e:
+            log.error(f"RMBG processing failed: {e}", exc_info=True)
+            await reply_or_edit(event, f"❌ <b>RMBG Failed:</b> <code>{html.escape(str(e))}</code>", parse_mode="html")
+
+    # =========================================================================
+    # TEXT TO STICKER (.txt, .text, .tsticker, .txts)
+    # =========================================================================
+    @client.on(events.NewMessage(pattern=r"^\.(?:txt|text|tsticker)(?::(\w+))?(?:\s+([\s\S]+))?$"))
+    async def txt_cmd(event):
+        if not is_authorized(event):
+            return
+
+        colon_tag = (event.pattern_match.group(1) or "").strip().lower()
+        raw_args = (event.pattern_match.group(2) or "").strip()
+        replied = await event.get_reply_message()
+
+        # Handle catalog requests: .txt styles / .txt list / .txt help
+        if raw_args.lower() in ["styles", "list", "help", "catalog"] or colon_tag in ["styles", "list", "help", "catalog"]:
+            await reply_or_edit(event, txt_sticker.get_styles_catalog(), parse_mode="html")
+            return
+
+        reply_to_id = None
+        target_text = ""
+
+        if replied:
+            reply_to_id = replied.id
+            if raw_args:
+                target_text = raw_args
+            else:
+                target_text = replied.raw_text or replied.message or ""
+        else:
+            if not raw_args:
+                await reply_or_edit(
+                    event,
+                    "ℹ️ <b>Usage:</b> <code>.txt &lt;text&gt;</code> ya kisi message par reply karke <code>.txt</code> likhein.\n"
+                    "• Styles: <code>.txt:neon hello</code>, <code>.txt:fire text</code>, <code>.txt:pack text</code>\n"
+                    "• Catalog: <code>.txts</code> (view all 40+ styles)",
+                    parse_mode="html"
+                )
+                return
+
+            tokens = raw_args.split(maxsplit=1)
+            first_token = tokens[0]
+            if first_token.startswith("@") and len(tokens) > 1:
+                uname = first_token[1:].lower()
+                for msg in reversed(_recent_messages.get(event.chat_id, [])):
+                    if msg.get("sender_username") and msg["sender_username"].lower() == uname:
+                        reply_to_id = msg["id"]
+                        break
+                target_text = tokens[1].strip()
+            else:
+                target_text = raw_args
+
+        if not target_text.strip():
+            await reply_or_edit(event, "❌ <i>Sticker banane ke liye koi text nahi mila.</i>", parse_mode="html")
+            return
+
+        try:
+            # Parse style & pack options
+            clean_text, style, is_pack, is_cat = txt_sticker.parse_txt_input(
+                target_text,
+                is_reply=bool(replied),
+                replied_text=(replied.raw_text or replied.message or "") if replied else ""
+            )
+
+            if colon_tag:
+                tag_lower = colon_tag.lower()
+                if tag_lower in ["pack", "4"]:
+                    is_pack = True
+                style = txt_sticker.STYLE_ALIASES.get(tag_lower, tag_lower)
+
+            # Check for color flags or bubble flag (-b)
+            clean_text, text_color, stroke_color, is_bubble = txt_sticker.parse_text_and_options(clean_text)
+            if not clean_text:
+                clean_text = target_text
+
+            # Always delete the user's triggering command message
+            if event.out:
+                try: await event.delete()
+                except Exception: pass
+
+            if is_pack:
+                pack_buffers = txt_sticker.generate_sticker_pack(clean_text, 4)
+                for buf in pack_buffers:
+                    bio = io.BytesIO(buf)
+                    bio.name = "sticker.webp"
+                    await client.send_file(
+                        event.chat_id,
+                        bio,
+                        reply_to=reply_to_id
+                    )
+            else:
+                ai_design = None
+                if style == "random" and not is_bubble and not colon_tag:
+                    try:
+                        ai_design = await txt_sticker.analyze_text_with_ai(clean_text, timeout=1.4)
+                    except Exception:
+                        ai_design = None
+
+                sticker_bytes = txt_sticker.create_text_sticker(
+                    clean_text,
+                    style=style,
+                    text_color=text_color,
+                    stroke_color=stroke_color,
+                    bg_bubble=is_bubble,
+                    ai_design=ai_design
+                )
+                bio = io.BytesIO(sticker_bytes)
+                bio.name = "sticker.webp"
+
+                await client.send_file(
+                    event.chat_id,
+                    bio,
+                    reply_to=reply_to_id
+                )
+
+        except Exception as e:
+            log.error(f"Text sticker error: {e}", exc_info=True)
+            await reply_or_edit(event, f"❌ <b>Text Sticker Failed:</b> <code>{html.escape(str(e))}</code>", parse_mode="html")
+
+    @client.on(events.NewMessage(pattern=r"^\.(?:txts|txtstyles)$"))
+    async def txts_cmd(event):
+        if not is_authorized(event):
+            return
+        await reply_or_edit(event, txt_sticker.get_styles_catalog(), parse_mode="html")
+
 
     @client.on(events.NewMessage(pattern=r"^\.(?:afk|unafk)(?:\s+([\s\S]+))?$"))
     async def afk_cmd(event):
@@ -719,6 +1220,291 @@ def register(client: TelegramClient, is_authorized):
             await reply_or_edit(event, card, parse_mode="html")
         else:
             await reply_or_edit(event, f"ℹ️ Entity ID: <code>{getattr(entity, 'id', 'Unknown')}</code>", parse_mode="html")
+
+    # =========================================================================
+    # CLONE & REVERT PROFILE SYSTEM (.clone, .revert, .unclone) [OWNER ONLY]
+    # =========================================================================
+    @client.on(events.NewMessage(pattern=r"^\.clone(?:\s+(.+))?$"))
+    async def clone_cmd(event):
+        if not check_is_owner(event):
+            if is_authorized(event):
+                await reply_or_edit(
+                    event,
+                    "⚠️ <b>Permission Denied:</b> Sirf bot owner hi profile clone kar sakte hain (sudo users are not permitted).",
+                    parse_mode="html"
+                )
+            return
+
+        arg = (event.pattern_match.group(1) or "").strip()
+        reply = await event.get_reply_message()
+
+        if arg.lower() == "status":
+            status_text = clone_profile.get_clone_status()
+            await reply_or_edit(event, status_text, parse_mode="html")
+            return
+
+        if arg.lower() == "reset":
+            if database.has_clone_backup():
+                database.clear_clone_backup()
+                database.set_clone_active(False)
+                if os.path.exists(clone_profile.BACKUP_DP_FILE):
+                    try:
+                        os.remove(clone_profile.BACKUP_DP_FILE)
+                    except Exception:
+                        pass
+                await reply_or_edit(event, "🧹 <b>Clone backup manually cleared.</b>", parse_mode="html")
+            else:
+                await reply_or_edit(event, "ℹ️ <i>Koi clone backup exist nahi karta.</i>", parse_mode="html")
+            return
+
+        target = None
+        if reply:
+            try:
+                target = await reply.get_sender()
+            except Exception:
+                target = None
+            if not target:
+                target = reply.sender_id or reply.sender
+        elif arg:
+            target_str = arg.strip()
+            if target_str.isdigit() or (target_str.startswith("-") and target_str[1:].isdigit()):
+                target = int(target_str)
+            else:
+                target = target_str
+        else:
+            usage = (
+                "⚠️ <b>Usage:</b>\n"
+                "• Kisi user ke message par reply karke <code>.clone</code> likhein.\n"
+                "• Ya <code>.clone @username</code> ya <code>.clone &lt;user_id&gt;</code> use karein.\n"
+                "• <code>.clone status</code> — Current clone status dekhein.\n"
+                "• <code>.revert</code> / <code>.unclone</code> — Original profile wapas layein."
+            )
+            await reply_or_edit(event, usage, parse_mode="html")
+            return
+
+        status_msg = await reply_or_edit(event, "🔄 <i>Cloning user profile...</i>", parse_mode="html")
+        try:
+            success, msg = await clone_profile.clone_user_profile(client, target, event=event)
+            if event.out and status_msg:
+                try:
+                    await status_msg.edit(msg, parse_mode="html")
+                except Exception:
+                    await reply_or_edit(event, msg, parse_mode="html")
+            else:
+                await reply_or_edit(event, msg, parse_mode="html")
+        except Exception as e:
+            err = f"❌ Clone failed: <code>{html.escape(str(e))}</code>"
+            if event.out and status_msg:
+                try:
+                    await status_msg.edit(err, parse_mode="html")
+                except Exception:
+                    pass
+            else:
+                await reply_or_edit(event, err, parse_mode="html")
+
+    @client.on(events.NewMessage(pattern=r"^\.(?:revert|unclone)$"))
+    async def revert_cmd(event):
+        if not check_is_owner(event):
+            if is_authorized(event):
+                await reply_or_edit(
+                    event,
+                    "⚠️ <b>Permission Denied:</b> Sirf bot owner hi profile revert kar sakte hain (sudo users are not permitted).",
+                    parse_mode="html"
+                )
+            return
+
+        status_msg = await reply_or_edit(event, "🔄 <i>Restoring original profile...</i>", parse_mode="html")
+        try:
+            success, msg = await clone_profile.revert_user_profile(client, event=event)
+            if event.out and status_msg:
+                try:
+                    await status_msg.edit(msg, parse_mode="html")
+                except Exception:
+                    await reply_or_edit(event, msg, parse_mode="html")
+            else:
+                await reply_or_edit(event, msg, parse_mode="html")
+        except Exception as e:
+            err = f"❌ Revert failed: <code>{html.escape(str(e))}</code>"
+            if event.out and status_msg:
+                try:
+                    await status_msg.edit(err, parse_mode="html")
+                except Exception:
+                    pass
+            else:
+                await reply_or_edit(event, err, parse_mode="html")
+
+    # =========================================================================
+    # ANIME REACTION & WAIFU SYSTEM (.waifu, .hug, .pat, .slap, etc. - 30 Categories)
+    # =========================================================================
+    @client.on(events.NewMessage(pattern=r"^\.(?:waifu|anime)(?:\s+(.*))?$"))
+    async def waifu_cmd(event):
+        if not is_authorized(event):
+            return
+
+        arg = (event.pattern_match.group(1) or "").strip().lower()
+
+        if arg in ["art", "random", "pic", "image"]:
+            status_msg = await reply_or_edit(event, "🌸 <i>Fetching random waifu artwork...</i>", parse_mode="html")
+            artwork = await waifu.fetch_random_waifu_artwork()
+            if artwork and artwork.get("url"):
+                caption = (
+                    "<blockquote>🌸 <b>Random Waifu Art</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    f"<i>Artist:</i> <b>{html.escape(artwork.get('artist') or 'Anime Artist')}</b> • "
+                    f"<i>Source:</i> <code>{html.escape(artwork.get('source') or 'Web')}</code></blockquote>"
+                )
+                sent = False
+                reply_target = event.reply_to_msg_id or (event.id if not event.out else None)
+                try:
+                    await client.send_file(
+                        event.chat_id,
+                        artwork["url"],
+                        caption=caption,
+                        parse_mode="html",
+                        reply_to=reply_target
+                    )
+                    sent = True
+                except Exception:
+                    media = await waifu.download_media_bytes(artwork["url"])
+                    if media:
+                        m_bytes, m_name = media
+                        bio = io.BytesIO(m_bytes)
+                        bio.name = m_name
+                        try:
+                            await client.send_file(
+                                event.chat_id,
+                                bio,
+                                caption=caption,
+                                parse_mode="html",
+                                reply_to=reply_target
+                            )
+                            sent = True
+                        except Exception:
+                            pass
+
+                if sent:
+                    if event.out:
+                        try: await event.delete()
+                        except Exception: pass
+                    elif status_msg:
+                        try: await status_msg.delete()
+                        except Exception: pass
+                    return
+
+            await reply_or_edit(event, "❌ <i>Could not fetch waifu artwork right now. Please try again!</i>", parse_mode="html")
+            return
+
+        # Default: display full stylish directory
+        directory_text = waifu.build_waifu_directory_text()
+        await reply_or_edit(event, directory_text, parse_mode="html")
+
+    _WAIFU_REACTION_PATTERN = r"^\.(hug|pat|kiss|cuddle|handhold|feed|tickle|poke|bite|wink|smug|pout|smile|wave|dance|laugh|highfive|cheers|slap|bonk|punch|yeet|stare|run|blush|cry|sleep|think|shrug|nom)(?:\s+(.*))?$"
+
+    @client.on(events.NewMessage(pattern=_WAIFU_REACTION_PATTERN))
+    async def waifu_reaction_cmd(event):
+        if not is_authorized(event):
+            return
+
+        cmd = event.pattern_match.group(1).lower()
+        raw_arg = (event.pattern_match.group(2) or "").strip()
+
+        # Sender resolution
+        sender = None
+        try:
+            sender = await event.get_sender()
+        except Exception:
+            sender = None
+        if not sender and event.out:
+            try:
+                sender = await client.get_me()
+            except Exception:
+                sender = None
+        sender_name = "User"
+        sender_id = event.sender_id or 0
+        if sender:
+            fn = getattr(sender, "first_name", "") or ""
+            ln = getattr(sender, "last_name", "") or ""
+            sender_name = f"{fn} {ln}".strip() or "User"
+            sender_id = getattr(sender, "id", sender_id)
+
+        # Target resolution
+        target_name = None
+        target_id = None
+
+        reply = await event.get_reply_message()
+        if reply:
+            target_sender = None
+            try:
+                target_sender = await reply.get_sender()
+            except Exception:
+                target_sender = None
+            if target_sender:
+                t_fn = getattr(target_sender, "first_name", "") or ""
+                t_ln = getattr(target_sender, "last_name", "") or ""
+                target_name = f"{t_fn} {t_ln}".strip() or "friend"
+                target_id = getattr(target_sender, "id", reply.sender_id)
+            elif reply.sender_id:
+                target_name = "friend"
+                target_id = reply.sender_id
+        elif raw_arg:
+            target_str = raw_arg.split()[0]
+            if target_str.startswith("@") or target_str.lstrip("-").isdigit():
+                try:
+                    ent = await client.get_entity(int(target_str) if target_str.lstrip("-").isdigit() else target_str)
+                    if ent:
+                        e_fn = getattr(ent, "first_name", "") or getattr(ent, "title", "") or ""
+                        e_ln = getattr(ent, "last_name", "") or ""
+                        target_name = f"{e_fn} {e_ln}".strip() or "friend"
+                        target_id = getattr(ent, "id", None)
+                except Exception:
+                    target_name = target_str.lstrip("@")
+            else:
+                target_name = target_str
+
+        caption = waifu.format_reaction_caption(cmd, sender_name, sender_id, target_name, target_id)
+
+        reaction = await waifu.fetch_waifu_reaction(cmd)
+        sent = False
+        reply_target_id = reply.id if reply else (event.id if not event.out else None)
+
+        if reaction and reaction.get("url"):
+            gif_url = reaction["url"]
+            try:
+                await client.send_file(
+                    event.chat_id,
+                    gif_url,
+                    caption=caption,
+                    parse_mode="html",
+                    reply_to=reply_target_id
+                )
+                sent = True
+            except Exception as e:
+                log.debug(f"Direct URL send failed for waifu reaction: {e}")
+                media = await waifu.download_media_bytes(gif_url)
+                if media:
+                    m_bytes, m_name = media
+                    bio = io.BytesIO(m_bytes)
+                    bio.name = m_name
+                    try:
+                        await client.send_file(
+                            event.chat_id,
+                            bio,
+                            caption=caption,
+                            parse_mode="html",
+                            reply_to=reply_target_id
+                        )
+                        sent = True
+                    except Exception as e2:
+                        log.warning(f"Failed to send downloaded reaction bytes: {e2}")
+
+        if not sent:
+            await reply_or_edit(event, caption, parse_mode="html")
+
+        if event.out and sent:
+            try:
+                await event.delete()
+            except Exception:
+                pass
 
     @client.on(events.NewMessage(pattern=r"^\.(?:song|music)(?:\s+([\s\S]+))?$"))
     async def song_cmd(event):

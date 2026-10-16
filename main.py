@@ -4152,7 +4152,7 @@ async def root(token: str | None = None):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>🐍 Viper Userbot</title>
+        <title>🐍 Viper Userbot — Hidden Word Hunt</title>
         <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
             .container { text-align: center; max-width: 600px; padding: 2rem; background-color: #1e293b; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
@@ -4165,7 +4165,7 @@ async def root(token: str | None = None):
     <body>
         <div class="container">
             <h1>🐍 Viper Userbot</h1>
-            <p>Ultra-fast Telegram Assistant, AI Suite & Game Solver. Bot service is active and running 24/7.</p>
+            <p>Ultra-fast Telegram Assistant, AI Suite & Hidden Word Hunt Solver. Bot service is active and running 24/7.</p>
             <a href="https://t.me/Gazarkahalwahu" class="btn" target="_blank">Developer & Support</a>
         </div>
     </body>
@@ -4954,7 +4954,7 @@ async def run_web_server():
     await server.serve()
     log.warning("Web server stopped.")
 
-extra_plugins.register(client, is_authorized)
+extra_plugins.register(client, is_authorized, is_owner)
 
 async def supervised_task(name: str, coro_fn):
     """Supervisor wrapper that auto-restarts individual services with exponential backoff and crash window protection."""
